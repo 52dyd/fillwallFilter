@@ -197,7 +197,8 @@ static int datadev_open(struct inode *inode, struct file *file) {
 
 static ssize_t datadev_read(struct file *file, char __user *buf, size_t size, loff_t *ppos) {
 	int ret = 0;
-
+	int d, i=0;
+	Connection *p = NULL;
 	// 获取连接表
 	if (op_flag == OP_GET_CONNECT) {
 		// 等待开锁
@@ -213,8 +214,8 @@ static ssize_t datadev_read(struct file *file, char __user *buf, size_t size, lo
 			return size;
 		}
 
-		Connection *p = conHead.next;
-		int d, i=0;
+		p = conHead.next;
+		//int d, i=0;
 		while (p != &conEnd) {
 			d = p->src_ip;
 			memcpy(&databuf[i * (sizeof(Connection) - 4)], &d, sizeof(unsigned));
@@ -256,6 +257,7 @@ static ssize_t datadev_read(struct file *file, char __user *buf, size_t size, lo
 }
 
 static ssize_t datadev_write(struct file *file, const char __user *user, size_t size, loff_t *ppos) {
+	int opt;
 	if (size > 20480) {
 		printk("Write Overflow\n");
 		return 20480;
@@ -263,7 +265,7 @@ static ssize_t datadev_write(struct file *file, const char __user *user, size_t 
 
 	copy_from_user(databuf, user, size);
 
-	int opt = 0x03 & databuf[size-1];
+	opt = 0x03 & databuf[size-1];
 
 	if (opt == OP_WRITE_RULE) {
 		op_flag = 0;
@@ -469,18 +471,21 @@ static unsigned get_hash(int k) {
 }
 
 bool check_pkg(struct sk_buff *skb) {
+	int i;
+	struct iphdr *ip = NULL;
+	int syn;
+	Rule pkg;
+	int pos;
 	if(!skb)
 		return true;
 	
-	int i = 0;
-	struct iphdr *ip = ip_hdr(skb);
+	i = 0;
+	ip = ip_hdr(skb);
 	
-	Rule pkg;
 	pkg.src_ip = ntohl(ip->saddr);
 	pkg.dst_ip = ntohl(ip->daddr);
 	pkg.src_mask = pkg.dst_mask = 0xffffffff;
 
-	int syn;
 	if (ip->protocol == TCP) {
 		struct tcphdr *tcp = tcp_hdr(skb);
 		pkg.src_port = ntohs(tcp->source);
@@ -511,7 +516,7 @@ bool check_pkg(struct sk_buff *skb) {
 		return true;
 	}
 
-	int pos = is_in_hashTable(pkg.src_ip, pkg.dst_ip, pkg.src_port, pkg.dst_port, pkg.protocol);
+	pos = is_in_hashTable(pkg.src_ip, pkg.dst_ip, pkg.src_port, pkg.dst_port, pkg.protocol);
 	if (pos == -1) {
 		return true;
 	}
